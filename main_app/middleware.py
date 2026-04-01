@@ -14,12 +14,13 @@ class LoginCheckMiddleware(MiddlewareMixin):
         user = request.user
 
         if user.is_authenticated:
-            if user.user_type == '1' and module == 'main_app.counsellor_views':
-                return redirect(reverse('admin_home'))
-            if user.user_type == '2' and module == 'main_app.admin_views':
-                return redirect(reverse('counsellor_home'))
-            if user.user_type not in ('1', '2'):
-                return redirect(reverse('login_page'))
+            ut = str(getattr(user, "user_type", ""))
+            if ut == "1" and module == "main_app.counsellor_views":
+                return redirect(reverse("admin_home"))
+            if ut == "2" and module == "main_app.admin_views":
+                return redirect(reverse("counsellor_home"))
+            if ut not in ("1", "2"):
+                return redirect(reverse("login_page"))
             return None
 
         login_path = reverse('login_page')

@@ -664,11 +664,15 @@ def ensure_admin_profile(sender, instance, **kwargs):
 def save_user_profile(sender, instance, **kwargs):
     try:
         if _is_admin_user_type(instance.user_type):
-            if hasattr(instance, "admin"):
+            try:
                 instance.admin.save()
-        if instance.user_type == '2':
-            if hasattr(instance, 'counsellor'):
+            except Admin.DoesNotExist:
+                pass
+        if str(instance.user_type) == "2":
+            try:
                 instance.counsellor.save()
+            except Counsellor.DoesNotExist:
+                pass
     except Exception as e:
         logger = logging.getLogger(__name__)
         logger.error(f"Error saving user profile: {e}")

@@ -15,9 +15,10 @@ from .models import Counsellor, Lead, NotificationAdmin, NotificationCounsellor
 
 def login_page(request):
     if request.user.is_authenticated:
-        if request.user.user_type == '1':
+        ut = str(getattr(request.user, "user_type", ""))
+        if ut == "1":
             return redirect(reverse("admin_home"))
-        elif request.user.user_type == '2':
+        if ut == "2":
             return redirect(reverse("counsellor_home"))
     return render(request, 'main_app/login.html')
 
@@ -38,9 +39,10 @@ def doLogin(request, **kwargs):
 
     login(request, user)
 
-    if user.user_type == '1':
+    ut = str(getattr(user, "user_type", ""))
+    if ut == "1":
         return redirect(reverse("admin_home"))
-    if user.user_type == '2':
+    if ut == "2":
         return redirect(reverse("counsellor_home"))
 
     messages.error(request, "Invalid user type")

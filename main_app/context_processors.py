@@ -1,18 +1,33 @@
-from .models import NotificationCounsellor, NotificationAdmin, Admin
+from .models import Admin, Counsellor, NotificationAdmin, NotificationCounsellor
+
 
 def notification_count(request):
+    """
+    Notification badge count. Do not use hasattr(user, 'counsellor'): reverse OneToOne
+    raises Model.DoesNotExist (not AttributeError), which hasattr does not catch → HTTP 500.
+    """
     count = 0
-    if request.user.is_authenticated:
-        if hasattr(request.user, 'counsellor'):
-            count = NotificationCounsellor.objects.filter(counsellor=request.user.counsellor, is_read=False).count()
-        elif hasattr(request.user, 'admin'):
-            count = NotificationAdmin.objects.filter(admin=request.user, is_read=False).count()
-    return {'notification_count': count}
+    if not request.user.is_authenticated:
+        return {"notification_count": count}
+    ut = str(getattr(request.user, "user_type", ""))
+    if ut == "2":
+        try:
+            counsellor = request.user.counsellor
+            count = NotificationCounsellor.objects.filter(
+                counsellor=counsellor, is_read=False
+            ).count()
+        except Counsellor.DoesNotExist:
+            count = 0
+    if ut == "1":
+        count = NotificationAdmin.objects.filter(
+            admin=request.user, is_read=False
+        ).count()
+    return {"notification_count": count}
 
 
 def pending_task_count(request):
     """Sidebar badge: incomplete activities + upcoming visits."""
-    if not request.user.is_authenticated or getattr(request.user, 'user_type', None) != '2':
+    if not request.user.is_authenticated or str(getattr(request.user, "user_type", "")) != "2":
         return {}
     try:
         from .models import Counsellor, LeadActivity, Lead
@@ -47,7 +62,7 @@ def lead_status_info(request):
 
 def admin_permissions(request):
     """perm_delete, perm_performance, etc. for admin templates."""
-    if not request.user.is_authenticated or getattr(request.user, 'user_type', None) != '1':
+    if not request.user.is_authenticated or str(getattr(request.user, "user_type", "")) != "1":
         return {}
     try:
         admin_obj = Admin.objects.get(admin=request.user)

@@ -1,9 +1,13 @@
+import logging
+
 from django.conf import settings
 from django.core.cache import cache
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseForbidden
 from functools import wraps
+
+logger = logging.getLogger(__name__)
 
 def paginate_queryset(request, queryset, count=10):
     """
@@ -28,7 +32,7 @@ def user_type_required(user_type):
         @login_required(login_url='login_page')
         @wraps(view_func)
         def _wrapped(request, *args, **kwargs):
-            if getattr(request.user, 'user_type', None) != user_type:
+            if str(getattr(request.user, "user_type", "")) != str(user_type):
                 return HttpResponseForbidden("Access denied")
             return view_func(request, *args, **kwargs)
         return _wrapped
@@ -123,9 +127,12 @@ def get_counsellor_activity_snapshot(counsellor):
     ttl = int(getattr(settings, 'COUNSELLOR_SNAPSHOT_CACHE_SECONDS', 45))
     cache_key = f'crm:counsellor_activity_snapshot:{counsellor.pk}'
     if ttl > 0:
-        hit = cache.get(cache_key)
-        if hit is not None:
-            return hit
+        try:
+            hit = cache.get(cache_key)
+            if hit is not None:
+                return hit
+        except Exception:
+            logger.warning("Counsellor snapshot cache read failed", exc_info=True)
 
     from datetime import timedelta
     from django.db.models import Count
@@ -229,5 +236,8 @@ def get_counsellor_activity_snapshot(counsellor):
         'target_progress_pct': target_progress['target_progress_pct'],
     }
     if ttl > 0:
-        cache.set(cache_key, out, ttl)
+        try:
+            cache.set(cache_key, out, ttl)
+        except Exception:
+            logger.warning("Counsellor snapshot cache write failed", exc_info=True)
     return out
