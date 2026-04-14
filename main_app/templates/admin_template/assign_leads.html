@@ -34,6 +34,18 @@
                                         <form method="POST" action="{% url 'assign_leads_to_counsellors' %}">
                                             {% csrf_token %}
                                             <input type="hidden" name="assignment_method" value="round_robin">
+                                            <div class="form-group">
+                                                <label>Apply to Counsellors (Optional)</label>
+                                                <div style="max-height: 170px; overflow-y: auto; border: 1px solid #ced4da; border-radius: .25rem; padding: .5rem;">
+                                                    {% for c in active_counsellors %}
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" name="selected_counsellor_ids" value="{{ c.id }}" id="rr_c_{{ c.id }}">
+                                                            <label class="form-check-label" for="rr_c_{{ c.id }}">{{ c.admin.first_name }} {{ c.admin.last_name }}</label>
+                                                        </div>
+                                                    {% endfor %}
+                                                </div>
+                                                <small class="form-text text-muted">Leave all unchecked to use all active counsellors.</small>
+                                            </div>
                                             <button type="submit" class="btn btn-primary">
                                                 <i class="fas fa-random"></i> Round-Robin Assignment
                                             </button>
@@ -57,6 +69,18 @@
                                         <form method="POST" action="{% url 'assign_leads_to_counsellors' %}">
                                             {% csrf_token %}
                                             <input type="hidden" name="assignment_method" value="workload_balanced">
+                                            <div class="form-group">
+                                                <label>Apply to Counsellors (Optional)</label>
+                                                <div style="max-height: 170px; overflow-y: auto; border: 1px solid #ced4da; border-radius: .25rem; padding: .5rem;">
+                                                    {% for c in active_counsellors %}
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" name="selected_counsellor_ids" value="{{ c.id }}" id="wb_c_{{ c.id }}">
+                                                            <label class="form-check-label" for="wb_c_{{ c.id }}">{{ c.admin.first_name }} {{ c.admin.last_name }}</label>
+                                                        </div>
+                                                    {% endfor %}
+                                                </div>
+                                                <small class="form-text text-muted">Leave all unchecked to use all active counsellors.</small>
+                                            </div>
                                             <button type="submit" class="btn btn-success">
                                                 <i class="fas fa-balance-scale"></i> Workload Balanced
                                             </button>
@@ -82,6 +106,18 @@
                                         <form method="POST" action="{% url 'assign_leads_to_counsellors' %}">
                                             {% csrf_token %}
                                             <input type="hidden" name="assignment_method" value="performance_based">
+                                            <div class="form-group">
+                                                <label>Apply to Counsellors (Optional)</label>
+                                                <div style="max-height: 170px; overflow-y: auto; border: 1px solid #ced4da; border-radius: .25rem; padding: .5rem;">
+                                                    {% for c in active_counsellors %}
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" name="selected_counsellor_ids" value="{{ c.id }}" id="pb_c_{{ c.id }}">
+                                                            <label class="form-check-label" for="pb_c_{{ c.id }}">{{ c.admin.first_name }} {{ c.admin.last_name }}</label>
+                                                        </div>
+                                                    {% endfor %}
+                                                </div>
+                                                <small class="form-text text-muted">Leave all unchecked to use all active counsellors.</small>
+                                            </div>
                                             <button type="submit" class="btn btn-warning">
                                                 <i class="fas fa-trophy"></i> Performance Based
                                             </button>
@@ -105,6 +141,18 @@
                                         <form method="POST" action="{% url 'assign_leads_to_counsellors' %}">
                                             {% csrf_token %}
                                             <input type="hidden" name="assignment_method" value="specialization_based">
+                                            <div class="form-group">
+                                                <label>Apply to Counsellors (Optional)</label>
+                                                <div style="max-height: 170px; overflow-y: auto; border: 1px solid #ced4da; border-radius: .25rem; padding: .5rem;">
+                                                    {% for c in active_counsellors %}
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" name="selected_counsellor_ids" value="{{ c.id }}" id="sb_c_{{ c.id }}">
+                                                            <label class="form-check-label" for="sb_c_{{ c.id }}">{{ c.admin.first_name }} {{ c.admin.last_name }}</label>
+                                                        </div>
+                                                    {% endfor %}
+                                                </div>
+                                                <small class="form-text text-muted">Leave all unchecked to use all active counsellors.</small>
+                                            </div>
                                             <button type="submit" class="btn btn-info">
                                                 <i class="fas fa-user-graduate"></i> Specialization Based
                                             </button>

@@ -81,8 +81,8 @@ Use the **quick action** buttons (if shown) to jump to **Import Leads** or **Ass
 
 **Import file columns (typical)**  
 Your administrator may give you a template. Commonly expected columns include:
-- **Required:** `first_name`, `last_name`, `email`, `phone`, `course_interested`  
-- **Optional:** `alternate_phone`, `School Name`, `graduation_status` (YES/NO), `graduation_course`, `graduation_year`, `graduation_college`, `industry`  
+- **Required:** `name`, `phone`, `course_interested`  
+- **Optional:** `email`, `alternate_phone`, `address`, `School Name`, `graduation_status` (YES/NO), `graduation_course`, `graduation_year`, `graduation_college`, `industry`  
 
 During import you choose a **lead source** and may assign a counsellor or use **auto-assign** options.
 

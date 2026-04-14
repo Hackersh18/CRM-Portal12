@@ -4,6 +4,7 @@ Django-based **Customer Relationship Management** for lead intake, counsellor as
 
 **Full technical documentation:** see **[DOCUMENTATION.md](./DOCUMENTATION.md)** (setup, env vars, deployment, security, troubleshooting).
 
+
 **User manual (admins & counsellors):** **[USER_MANUAL.md](./USER_MANUAL.md)** — how to use every feature in the web app.
 
 ---

@@ -1,5 +1,7 @@
 # Hostinger Deployment Guide for CRM Portal
 
+**Configuration:** This project uses **environment variables** for `DEBUG`, `ALLOWED_HOSTS`, `SECRET_KEY`, and the database URL (see `.env.example` and `college_management_system/settings.py`). Prefer **`.env`** or **systemd `EnvironmentFile`** instead of editing `settings.py`. For a generic Ubuntu layout (paths, Unix socket, `/etc/crm/crm.env`), see **[LINUX_SERVER_SETUP.md](./LINUX_SERVER_SETUP.md)**.
+
 ## 📋 Table of Contents
 1. [System Requirements](#system-requirements)
 2. [Cost Breakdown](#cost-breakdown)
@@ -209,25 +211,19 @@ nano .env
 # Save and exit: Ctrl+X, then Y, then Enter
 ```
 
-### Step 8: Update Django Settings
+### Step 8: Production flags (environment only)
 
-Update `college_management_system/settings.py`:
+Do **not** change `settings.py` for hosts or `DEBUG`. In your **`.env`** (or systemd environment file), set at minimum:
 
-```python
-# Update ALLOWED_HOSTS
-ALLOWED_HOSTS = ['yourdomain.com', 'www.yourdomain.com', 'your-vps-ip']
-
-# Ensure DEBUG is False in production
-DEBUG = False
-
-# Static files configuration (already configured with WhiteNoise)
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATIC_URL = '/static/'
-
-# Media files
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-MEDIA_URL = '/media/'
+```env
+DJANGO_DEBUG=False
+SECRET_KEY=your-long-random-secret
+DJANGO_ALLOWED_HOSTS=yourdomain.com,www.yourdomain.com,YOUR_VPS_IP
+CSRF_TRUSTED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
+DATABASE_URL=postgresql://crm_user:your_password@localhost:5432/crm_db
 ```
+
+`STATIC_ROOT`, `MEDIA_ROOT`, and WhiteNoise are already defined in `settings.py` for production.
 
 ### Step 9: Run Migrations
 

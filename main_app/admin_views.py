@@ -23,7 +23,15 @@ from django.utils import timezone
 from .forms import *
 from .lead_import_io import is_blank_import_value, iter_lead_import_rows
 from .models import *
-from .utils import paginate_queryset, user_type_required, admin_perm_required, get_counsellor_activity_snapshot
+from .utils import (
+    ADMIN_HOME_DASHBOARD_CACHE_KEY,
+    get_counsellor_activity_snapshot,
+    invalidate_admin_dashboard_cache,
+    paginate_queryset,
+    user_facing_exception_message,
+    user_type_required,
+    admin_perm_required,
+)
 
 admin_required = user_type_required('1')
 
@@ -48,6 +56,22 @@ def _new_import_lead_id():
 
 def _build_lead_from_import_row(row, source, assigned_counsellor):
     """Construct an unsaved Lead from one import row dict (raises on bad data)."""
+    full_name = _import_cell_str(row, "name")
+    phone = _import_cell_str(row, "phone")
+    course_interested = _import_cell_str(row, "course_interested")
+
+    # Import minimum required fields (as per import guide).
+    if not full_name:
+        raise ValueError("Missing required column value: name")
+    if not phone:
+        raise ValueError("Missing required column value: phone")
+    if not course_interested:
+        raise ValueError("Missing required column value: course_interested")
+
+    parts = full_name.split(None, 1)
+    first_name = parts[0]
+    last_name = parts[1] if len(parts) > 1 else ""
+
     raw_gs = row.get("graduation_status", "NO")
     if is_blank_import_value(raw_gs):
         graduation_status = "NO"
@@ -90,17 +114,18 @@ def _build_lead_from_import_row(row, source, assigned_counsellor):
 
     return Lead(
         lead_id=_new_import_lead_id(),
-        first_name=_import_cell_str(row, "first_name"),
-        last_name=_import_cell_str(row, "last_name"),
+        first_name=first_name,
+        last_name=last_name,
         email=_import_cell_str(row, "email"),
-        phone=_import_cell_str(row, "phone"),
+        phone=phone,
         alternate_phone=alternate_phone,
         school_name=_import_cell_str(row, "School Name"),
+        address=_import_cell_str(row, "address"),
         graduation_status=graduation_status,
         graduation_course=graduation_course,
         graduation_year=graduation_year,
         graduation_college=graduation_college,
-        course_interested=_import_cell_str(row, "course_interested"),
+        course_interested=course_interested,
         industry=_import_cell_str(row, "industry"),
         source=source,
         assigned_counsellor=assigned_counsellor,
@@ -235,7 +260,7 @@ def _fetch_admin_home_cached_payload():
 def admin_home(request):
     """Admin dashboard (aggregates cached; see ADMIN_DASHBOARD_CACHE_SECONDS)."""
     ttl = int(getattr(settings, 'ADMIN_DASHBOARD_CACHE_SECONDS', 45))
-    cache_key = 'crm:admin_home_dashboard_v2'
+    cache_key = ADMIN_HOME_DASHBOARD_CACHE_KEY
 
     try:
         if ttl > 0:
@@ -656,7 +681,7 @@ def delete_lead(request, lead_id):
     lead = get_object_or_404(Lead, id=lead_id)
     try:
         lead.delete()
-        cache.delete('crm:admin_home_dashboard_v2')
+        invalidate_admin_dashboard_cache()
         messages.success(request, "Lead deleted successfully!")
     except Exception as e:
         messages.error(request, f"Could not delete lead: {str(e)}")
@@ -678,7 +703,7 @@ def bulk_delete_leads(request):
 
     try:
         leads_qs.delete()
-        cache.delete('crm:admin_home_dashboard_v2')
+        invalidate_admin_dashboard_cache()
         messages.success(request, f"Successfully deleted {count} lead(s).")
     except Exception as e:
         messages.error(request, f"Could not delete selected leads: {str(e)}")
@@ -711,7 +736,7 @@ def delete_all_leads(request):
             messages.info(request, 'There are no leads to delete.')
             return redirect(reverse('manage_leads'))
         Lead.objects.all().delete()
-        cache.delete('crm:admin_home_dashboard_v2')
+        invalidate_admin_dashboard_cache()
         messages.success(request, f'Successfully deleted all {n} lead(s).')
     except Exception as e:
         logger.exception('delete_all_leads failed')
@@ -821,7 +846,10 @@ def import_leads(request):
                         messages.warning(request, f"Successfully imported {success_count} leads. {error_count} rows had errors and were skipped.")
                     else:
                         messages.success(request, f"Successfully imported {success_count} leads.")
-                
+
+                if success_count > 0:
+                    invalidate_admin_dashboard_cache()
+
                 return redirect(reverse('manage_leads'))
                 
             except Exception as e:
@@ -841,6 +869,20 @@ def assign_leads_to_counsellors(request):
             assignment_method = request.POST.get('assignment_method', 'round_robin')
             unassigned_leads = Lead.objects.filter(assigned_counsellor__isnull=True)
             active_counsellors = Counsellor.objects.filter(is_active=True)
+            selected_counsellor_ids = [x for x in request.POST.getlist('selected_counsellor_ids') if str(x).strip()]
+            selected_counsellors = []
+            if selected_counsellor_ids:
+                try:
+                    selected_ids = [int(x) for x in selected_counsellor_ids]
+                except ValueError:
+                    messages.error(request, "Selected counsellor list is invalid.")
+                    return redirect(reverse('assign_leads_to_counsellors'))
+
+                selected_counsellors = list(active_counsellors.filter(id__in=selected_ids).select_related('admin'))
+                if len(selected_counsellors) != len(set(selected_ids)):
+                    messages.error(request, "One or more selected counsellors are invalid or inactive.")
+                    return redirect(reverse('assign_leads_to_counsellors'))
+                active_counsellors = active_counsellors.filter(id__in=selected_ids)
             
             if not active_counsellors.exists():
                 messages.error(request, "No active counsellors found!")
@@ -863,7 +905,15 @@ def assign_leads_to_counsellors(request):
             else:
                 assigned_count = _assign_round_robin(unassigned_leads, active_counsellors)
             
-            messages.success(request, f"Successfully assigned {assigned_count} leads using {assignment_method.replace('_', ' ').title()} method!")
+            if selected_counsellors:
+                scope_label = f" for selected counsellors ({len(selected_counsellors)})"
+            else:
+                scope_label = " across all active counsellors"
+            messages.success(
+                request,
+                f"Successfully assigned {assigned_count} leads using {assignment_method.replace('_', ' ').title()} method{scope_label}!"
+            )
+            invalidate_admin_dashboard_cache()
             return redirect(reverse('assign_leads_to_counsellors'))
             
         except Exception as e:
@@ -922,7 +972,8 @@ def assign_leads_to_counsellors(request):
             'active_counsellors_count': active_counsellors_count,
             'avg_leads_per_counsellor': avg_leads_per_counsellor,
             'oldest_unassigned_days': oldest_unassigned_days,
-            'counsellor_workload': counsellor_workload
+            'counsellor_workload': counsellor_workload,
+            'active_counsellors': Counsellor.objects.filter(is_active=True).select_related('admin').order_by('admin__first_name', 'admin__last_name'),
         }
         
         return render(request, 'admin_template/assign_leads.html', context)

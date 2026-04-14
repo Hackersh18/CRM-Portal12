@@ -52,9 +52,12 @@ def verify_webhook(mode: str, token: str, challenge: str, cfg: dict) -> Optional
 
 
 def verify_signature(raw_body: bytes, sig_header: Optional[str], app_secret: str) -> bool:
-    if not app_secret:
-        logger.warning("META_APP_SECRET / app_secret empty — webhook signature not verified")
-        return True
+    if not (app_secret or "").strip():
+        logger.error(
+            "Meta webhook POST rejected: app secret not configured "
+            "(set META_APP_SECRET or MetaIntegrationSettings.app_secret)."
+        )
+        return False
     if not sig_header or not sig_header.startswith("sha256="):
         return False
     expected = hmac.new(

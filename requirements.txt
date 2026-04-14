@@ -1,4 +1,5 @@
 Django==4.2.9              # LTS, stable
+pytz>=2024.1               # counsellor_work_view and counsellor_views (timezone ranges)
 dj-database-url==0.5.0
 gunicorn>=22.0.0
 Pillow==10.4.0

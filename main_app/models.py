@@ -210,8 +210,12 @@ class Lead(models.Model):
     routed_to = models.CharField(max_length=100, blank=True)
     routing_reason = models.TextField(blank=True)
 
+    @property
+    def full_name(self):
+        return f"{self.first_name} {self.last_name}".strip()
+
     def __str__(self):
-        return f"{self.first_name} {self.last_name} - {self.school_name}"
+        return f"{self.full_name} - {self.school_name}".strip(" -")
 
     def save(self, *args, **kwargs):
         if not self.lead_id:

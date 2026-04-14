@@ -216,8 +216,13 @@ class NextActionForm(FormSettings):
 
 
 class LeadForm(FormSettings):
+    name = forms.CharField(max_length=200, required=True, label='Name')
+
     def __init__(self, *args, **kwargs):
         super(LeadForm, self).__init__(*args, **kwargs)
+        if self.instance and getattr(self.instance, 'pk', None):
+            full_name = f"{self.instance.first_name} {self.instance.last_name}".strip()
+            self.fields['name'].initial = full_name or self.instance.first_name
         # Hide the old industry field
         self.fields['industry'].widget = forms.HiddenInput()
         # Hide the is_graduated field (will be set automatically)
@@ -229,14 +234,26 @@ class LeadForm(FormSettings):
         self.fields['graduation_college'].required = False
         self.fields['is_graduated'].required = False
 
+    def clean_name(self):
+        return (self.cleaned_data.get('name') or '').strip()
+
+    def save(self, commit=True):
+        obj = super(LeadForm, self).save(commit=False)
+        full_name = self.cleaned_data.get('name', '')
+        parts = full_name.split(None, 1)
+        obj.first_name = parts[0] if parts else ''
+        obj.last_name = parts[1] if len(parts) > 1 else ''
+        if commit:
+            obj.save()
+        return obj
+
     class Meta:
         model = Lead
         fields = [
-            'first_name', 'last_name', 'email', 'phone', 'alternate_phone', 'school_name', 'position', 
+            'name', 'email', 'phone', 'alternate_phone', 'school_name', 'position',
             'graduation_status', 'graduation_course', 'graduation_year', 'graduation_college',
             'course_interested', 'is_graduated', 'industry', 'source', 'status', 'priority', 'assigned_counsellor',
-            'notes', 'address', 'city', 'state', 'country', 
-            'postal_code', 'website', 'linkedin', 'next_follow_up'
+            'notes', 'address', 'website', 'linkedin', 'next_follow_up'
         ]
         widgets = {
             'next_follow_up': DateTimeInput(attrs={'type': 'datetime-local'}),
@@ -248,20 +265,37 @@ class CounsellorLeadForm(FormSettings):
     Simplified lead form for counsellors to update key contact and follow-up details
     without changing routing/source fields reserved for admins.
     """
+    name = forms.CharField(max_length=200, required=True, label='Name')
+
     def __init__(self, *args, **kwargs):
         super(CounsellorLeadForm, self).__init__(*args, **kwargs)
+        if self.instance and getattr(self.instance, 'pk', None):
+            full_name = f"{self.instance.first_name} {self.instance.last_name}".strip()
+            self.fields['name'].initial = full_name or self.instance.first_name
         self.fields['graduation_year'].widget = forms.NumberInput(attrs={'min': '1950', 'max': '2030'})
         self.fields['graduation_course'].required = False
         self.fields['graduation_college'].required = False
 
+    def clean_name(self):
+        return (self.cleaned_data.get('name') or '').strip()
+
+    def save(self, commit=True):
+        obj = super(CounsellorLeadForm, self).save(commit=False)
+        full_name = self.cleaned_data.get('name', '')
+        parts = full_name.split(None, 1)
+        obj.first_name = parts[0] if parts else ''
+        obj.last_name = parts[1] if len(parts) > 1 else ''
+        if commit:
+            obj.save()
+        return obj
+
     class Meta:
         model = Lead
         fields = [
-            'first_name', 'last_name', 'email', 'phone', 'alternate_phone', 'school_name',
+            'name', 'email', 'phone', 'alternate_phone', 'school_name',
             'graduation_status', 'graduation_course', 'graduation_year', 'graduation_college',
             'course_interested', 'status', 'priority',
-            'notes', 'address', 'city', 'state', 'country',
-            'postal_code', 'next_follow_up'
+            'notes', 'address', 'next_follow_up'
         ]
         widgets = {
             'next_follow_up': DateTimeInput(attrs={'type': 'datetime-local'}),

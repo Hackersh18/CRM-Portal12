@@ -9,6 +9,29 @@ from functools import wraps
 
 logger = logging.getLogger(__name__)
 
+# Must match admin_home cache key in admin_views._fetch_admin_home_cached_payload consumers.
+ADMIN_HOME_DASHBOARD_CACHE_KEY = "crm:admin_home_dashboard_v2"
+
+
+def invalidate_admin_dashboard_cache() -> None:
+    """Clear cached admin dashboard aggregates (counsellor counts, lead stats, charts)."""
+    try:
+        cache.delete(ADMIN_HOME_DASHBOARD_CACHE_KEY)
+    except Exception:
+        logger.warning("Admin dashboard cache delete failed", exc_info=True)
+
+
+def user_facing_exception_message(exc: Exception, public_message: str) -> str:
+    """
+    Message safe for flash/UI: in DEBUG append exception text; in production only
+    public_message to avoid leaking DB paths, SQL, or stack fragments.
+    """
+    base = (public_message or "").strip()
+    if getattr(settings, "DEBUG", False):
+        return f"{base} ({exc})"
+    return base
+
+
 def paginate_queryset(request, queryset, count=10):
     """
     Utility function to paginate a queryset.

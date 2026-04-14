@@ -4,6 +4,12 @@ This document describes the **College / Institute CRM Portal** (Django applicati
 
 **End-user guide:** For administrators and counsellors using the web UI (menus, leads, imports, permissions), see [USER_MANUAL.md](./USER_MANUAL.md).
 
+**Linux — deploy process (choose dev vs server):** [LINUX_DEPLOY.md](./LINUX_DEPLOY.md).
+
+**Linux local setup (new folder + SQLite):** [LINUX_LOCAL_SETUP.md](./LINUX_LOCAL_SETUP.md).
+
+**Linux production server (Postgres, Gunicorn, Nginx):** [LINUX_SERVER_SETUP.md](./LINUX_SERVER_SETUP.md) (see also [HOSTINGER_DEPLOYMENT.md](./HOSTINGER_DEPLOYMENT.md)).
+
 ---
 
 ## 1. Overview
@@ -174,6 +180,8 @@ Collect static (production or when testing WhiteNoise):
 python manage.py collectstatic --noinput
 ```
 
+**AdminLTE `dist/` (required for login and many templates):** Templates reference `{% static 'dist/css/adminlte.min.css' %}`, `dist/js/adminlte.min.js`, and images under `dist/img/`. That tree must live under **`main_app/static/dist/`** (copied from [AdminLTE 3.x](https://github.com/ColorlibHQ/AdminLTE/releases) — use the `dist/` folder from the release archive). Older clones may be missing it because the root **`.gitignore` used to ignore any `dist/` directory**; use repo **`.gitignore`** with **`/dist/`** (root only) so `main_app/static/dist/` can be committed or restored. If `ls main_app/static/dist/css/adminlte.min.css` fails, add AdminLTE’s `dist/` there, then run **`collectstatic`** again.
+
 Run server:
 
 ```bash
@@ -198,6 +206,7 @@ Copy **`.env.example`** to **`.env`**. Important variables (non-exhaustive — s
 |----------|---------|
 | `SECRET_KEY` or `DJANGO_SECRET_KEY` | Django secret; **required** in production |
 | `DJANGO_DEBUG` | `True` / `False` |
+| `DJANGO_USE_HTTPS` | When `0`, `false`, `no`, or `off` and `DEBUG` is off: allow HTTP (no TLS redirect / non-secure cookies). Default when unset: `True` (HTTPS). Use for public-IP-only access until you have HTTPS. |
 | `DJANGO_ALLOWED_HOSTS` | Comma-separated hostnames (no `https://`, no trailing `/`) |
 | `CSRF_TRUSTED_ORIGINS` | Comma-separated origins, e.g. `https://app.example.com` |
 | `DATABASE_URL` | PostgreSQL connection URI (production) |
@@ -240,7 +249,17 @@ Copy **`.env.example`** to **`.env`**. Important variables (non-exhaustive — s
 - Prefer **transaction pooler** (**port `6543`**) for web apps and many short-lived connections.
 - **Session pooler** (`5432` on pooler host) has **low max clients**; the project defaults `CONN_MAX_AGE` appropriately for pooler hosts to avoid `MaxClientsInSessionMode`.
 
-### 9.3 IPv6 issues on some hosts
+### 9.3 Row Level Security (Supabase / PostgREST)
+
+Supabase’s **Data API** (PostgREST) can expose tables in `public` to `anon` and `authenticated` JWT roles. Django tables (users, sessions, leads, Meta tokens, etc.) must not be readable through that API.
+
+Migration **`0027_enable_postgres_row_level_security`** turns on **RLS** for all Django-managed tables in `public`. With RLS enabled and **no permissive policies**, PostgREST clients see **no rows** for those tables, while Django keeps working when the app connects as the **table owner** or **superuser** (the default Supabase **`postgres`** user used in `DATABASE_URL`).
+
+- If you use a **custom** Postgres role for Django that is **not** the table owner and **not** a superuser, run: `ALTER ROLE your_role BYPASSRLS;` (or move Django to a non-exposed schema and stop exposing it in the Supabase API settings).
+- **SQLite** and other backends skip this migration’s SQL (no-op).
+- **Alternative:** In the Supabase dashboard, remove `public` from **Exposed schemas** and use a dedicated schema only for tables you intend to query from the Supabase JS client — then RLS on Django tables is less critical, but enabling RLS is still a safe default.
+
+### 9.4 IPv6 issues on some hosts
 
 On **Vercel** / **Railway**, settings may resolve **IPv4** `hostaddr` for Postgres while keeping TLS hostname verification — mitigates “Cannot assign requested address” to some `db.*.supabase.co` endpoints.
 
@@ -252,8 +271,8 @@ On **Vercel** / **Railway**, settings may resolve **IPv4** `hostaddr` for Postgr
 
 **Expected columns (typical):**
 
-- **Required (as per UI guidance):** `first_name`, `last_name`, `email`, `phone`, `course_interested`
-- **Optional:** `alternate_phone`, `School Name`, `graduation_status` (YES/NO), `graduation_course`, `graduation_year`, `graduation_college`, `industry`
+- **Required (as per UI guidance):** `name`, `phone`, `course_interested`
+- **Optional:** `email`, `alternate_phone`, `address`, `School Name`, `graduation_status` (YES/NO), `graduation_course`, `graduation_year`, `graduation_college`, `industry`
 
 Import uses **batched `bulk_create`** for performance. **Auto-assignment** strategies exist (round-robin, workload-based, etc.) when selected on the import form.
 
@@ -263,6 +282,7 @@ Import uses **batched `bulk_create`** for performance. **Auto-assignment** strat
 
 ## 11. Security
 
+- **PostgreSQL on Supabase:** run migrations through **`0027`** so **RLS** is enabled on app tables; see §9.3. Do not expose CRM data via the Supabase Data API without explicit policies.
 - **CSRF** enabled; set `CSRF_TRUSTED_ORIGINS` for HTTPS deployments.
 - **Session cookies:** `HttpOnly`, `SameSite`; **secure** cookies when `DEBUG=False`.
 - **HSTS**, **SSL redirect**, **X-Frame-Options** in production (`DEBUG=False`).

@@ -162,18 +162,33 @@ if _render_external:
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
 
+# When False: HTTP-only (e.g. access by public IP before you have a domain / TLS).
+# Default True: redirect to HTTPS and secure cookies when DEBUG is off.
+# Accept DJANGO_USE_HTTPS=0 / false / no / off (systemd EnvironmentFile has no shell; use explicit values).
+_ht = (os.environ.get("DJANGO_USE_HTTPS") or "").strip().lower()
+if _ht in ("0", "false", "no", "off"):
+    _use_https = False
+elif _ht in ("1", "true", "yes", "on"):
+    _use_https = True
+else:
+    _use_https = True  # unset or unknown → secure default
+
 # Security Headers for Production
 if not DEBUG:
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
-    SECURE_HSTS_SECONDS = 31536000  # 1 year
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    # Behind Nginx with HTTPS termination; redirect HTTP to HTTPS
-    SECURE_SSL_REDIRECT = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = _use_https
+    SESSION_COOKIE_SECURE = _use_https
+    CSRF_COOKIE_SECURE = _use_https
+    if _use_https:
+        SECURE_HSTS_SECONDS = 31536000  # 1 year
+        SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+        SECURE_HSTS_PRELOAD = True
+    else:
+        SECURE_HSTS_SECONDS = 0
+        SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+        SECURE_HSTS_PRELOAD = False
     X_FRAME_OPTIONS = 'DENY'
 
 

@@ -27,3 +27,4 @@ class MainAppConfig(AppConfig):
         # Only optimize SQLite in development
         if settings.DEBUG:
             connection_created.connect(optimize_sqlite)
+        from . import dashboard_cache_signals  # noqa: F401 — register signal receivers
