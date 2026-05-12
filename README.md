@@ -41,6 +41,4 @@ Default remote may be `Hackersh18/CRM-Portal` or your fork — adjust clone URL 
 
 ---
 
-## License
 
-See **LICENSE** in the repository (if present). MIT mentioned historically; confirm the file shipped with your copy.
