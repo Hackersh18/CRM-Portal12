@@ -33,9 +33,17 @@
                                         {% if form.description.errors %}<span class="text-danger">{{form.description.errors}}</span>{% endif %}
                                     </div>
                                     <div class="form-group">
-                                        <label>Outcome<span class="text-danger">*</span></label>
-                                        {{form.outcome}}
-                                        {% if form.outcome.errors %}<span class="text-danger">{{form.outcome.errors}}</span>{% endif %}
+                                        <label>Outcome</label>
+                                        {{ form.outcome_preset }}
+                                        {% if form.outcome_preset.help_text %}
+                                            <small class="form-text text-muted">{{ form.outcome_preset.help_text }}</small>
+                                        {% endif %}
+                                        {% if form.outcome_preset.errors %}<span class="text-danger">{{ form.outcome_preset.errors }}</span>{% endif %}
+                                    </div>
+                                    <div class="form-group" id="outcome-other-wrap" style="display:none;">
+                                        <label>Custom outcome<span class="text-danger">*</span></label>
+                                        {{ form.outcome_other }}
+                                        {% if form.outcome_other.errors %}<span class="text-danger">{{ form.outcome_other.errors }}</span>{% endif %}
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -93,6 +101,13 @@
 {% block custom_js %}
 <script>
 $(function () {
+    function toggleOutcomeOther() {
+        var v = $('#id_outcome_preset').val();
+        $('#outcome-other-wrap').toggle(v === '__OTHER__');
+    }
+    $('#id_outcome_preset').on('change', toggleOutcomeOther);
+    toggleOutcomeOther();
+
     function toggleNextAction() {
         var isYes = $('input[name="has_next_action"]:checked').val() === 'yes';
         if (isYes) {

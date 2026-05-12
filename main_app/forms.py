@@ -51,20 +51,22 @@ class CustomUserForm(FormSettings):
 
         - On create: require password and hash it
         - On update: hash only if a new password was provided; otherwise keep existing
+
+        ModelForm.save(commit=False) assigns cleaned_data['password'] to the instance even when
+        the field was left blank on POST, which clears the stored hash. Restore from DB when blank.
         """
-        instance = super(CustomUserForm, self).save(commit=False)
+        from django.contrib.auth.hashers import make_password
+
         password = self.cleaned_data.get('password')
+        instance = super(CustomUserForm, self).save(commit=False)
 
-        # When creating a new user, password is required by the form; hash it
-        if not instance.pk and password:
-            from django.contrib.auth.hashers import make_password
-            instance.password = make_password(password)
-
-        # When updating existing user, hash only if password field was changed/provided
-        if instance.pk:
+        if not instance.pk:
             if password:
-                from django.contrib.auth.hashers import make_password
                 instance.password = make_password(password)
+        elif password:
+            instance.password = make_password(password)
+        else:
+            instance.password = CustomUser.objects.only('password').get(pk=instance.pk).password
 
         if commit:
             instance.save()
@@ -302,8 +304,55 @@ class CounsellorLeadForm(FormSettings):
         }
 
 
+# Preset values (first element) are stored on LeadActivity.outcome unless Other is chosen.
+ACTIVITY_OUTCOME_CHOICES = [
+    ('', 'Not answered / awaiting reply'),
+    ('Interested', 'Interested'),
+    ('Not interested', 'Not interested'),
+    ('Requested more information', 'Requested more information'),
+    ('Callback requested', 'Callback requested'),
+    ('Visit scheduled', 'Visit scheduled'),
+    ('No answer / unreachable', 'No answer / unreachable'),
+    ('Wrong number', 'Wrong number'),
+    ('__OTHER__', 'Other (enter below)'),
+]
+
+
+class CounsellorCreateLeadForm(CounsellorLeadForm):
+    """Create a new lead assigned to the current counsellor; includes source (admin-controlled list)."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['source'].queryset = LeadSource.objects.filter(is_active=True).order_by('name')
+        self.fields['source'].empty_label = 'Select lead source'
+
+    class Meta(CounsellorLeadForm.Meta):
+        fields = [
+            'name', 'email', 'phone', 'alternate_phone', 'school_name',
+            'graduation_status', 'graduation_course', 'graduation_year', 'graduation_college',
+            'course_interested', 'source', 'status', 'priority',
+            'notes', 'address', 'next_follow_up',
+        ]
+
+
 class LeadActivityForm(FormSettings):
     HAS_NEXT_ACTION_CHOICES = [('no', 'No'), ('yes', 'Yes')]
+
+    outcome_preset = forms.ChoiceField(
+        choices=ACTIVITY_OUTCOME_CHOICES,
+        required=False,
+        initial='',
+        label='Outcome',
+        help_text='If you leave this as “Not answered”, the lead is set to Awaiting Response.',
+    )
+    outcome_other = forms.CharField(
+        required=False,
+        max_length=200,
+        label='Custom outcome',
+        widget=forms.TextInput(
+            attrs={'class': 'form-control', 'placeholder': 'Type the outcome…'}
+        ),
+    )
 
     has_next_action = forms.ChoiceField(
         choices=HAS_NEXT_ACTION_CHOICES,
@@ -342,10 +391,48 @@ class LeadActivityForm(FormSettings):
         except Exception:
             pass
 
+        if self.instance and getattr(self.instance, 'pk', None):
+            o = (self.instance.outcome or '').strip()
+            preset_values = {
+                c[0] for c in ACTIVITY_OUTCOME_CHOICES if c[0] not in ('', '__OTHER__')
+            }
+            if o in preset_values:
+                self.fields['outcome_preset'].initial = o
+            elif o:
+                self.fields['outcome_preset'].initial = '__OTHER__'
+                self.fields['outcome_other'].initial = o
+            else:
+                self.fields['outcome_preset'].initial = ''
+
+    def clean(self):
+        cleaned_data = super(LeadActivityForm, self).clean()
+        preset = cleaned_data.get('outcome_preset')
+        if preset is None:
+            preset = ''
+        other = (cleaned_data.get('outcome_other') or '').strip()
+        if preset == '__OTHER__':
+            if not other:
+                raise ValidationError(
+                    {
+                        'outcome_other': 'Enter a custom outcome, or choose a different option above.',
+                    }
+                )
+            cleaned_data['_resolved_outcome'] = other[:200]
+        else:
+            cleaned_data['_resolved_outcome'] = (preset or '')[:200]
+        return cleaned_data
+
+    def save(self, commit=True):
+        obj = super(LeadActivityForm, self).save(commit=False)
+        obj.outcome = self.cleaned_data.get('_resolved_outcome', '')
+        if commit:
+            obj.save()
+        return obj
+
     class Meta:
         model = LeadActivity
         fields = [
-            'activity_type', 'subject', 'description', 'outcome', 'next_action',
+            'activity_type', 'subject', 'description', 'next_action',
             'scheduled_date', 'duration', 'is_completed'
         ]
         widgets = {
@@ -395,17 +482,23 @@ class CounsellorEditForm(CustomUserForm):
     employee_id = forms.CharField(max_length=20, required=True)
     department = forms.CharField(max_length=100, required=False)
     is_active = forms.BooleanField(required=False)
-    
+    can_create_own_leads = forms.BooleanField(
+        required=False,
+        label='Allow adding leads',
+        help_text='Let this counsellor add new leads from My Leads (assigned to them).',
+    )
+
     def __init__(self, *args, **kwargs):
         # Extract counsellor instance if provided
         counsellor_instance = kwargs.pop('counsellor_instance', None)
         super(CounsellorEditForm, self).__init__(*args, **kwargs)
-        
+
         # If we have a counsellor instance, populate the counsellor-specific fields
         if counsellor_instance:
             self.fields['employee_id'].initial = counsellor_instance.employee_id
             self.fields['department'].initial = counsellor_instance.department
             self.fields['is_active'].initial = counsellor_instance.is_active
+            self.fields['can_create_own_leads'].initial = counsellor_instance.can_create_own_leads
 
     class Meta(CustomUserForm.Meta):
         model = CustomUser
@@ -580,6 +673,59 @@ class MetaIntegrationSettingsForm(forms.ModelForm):
                 inst.app_secret = prev.app_secret
             if not (self.cleaned_data.get("access_token") or "").strip():
                 inst.access_token = prev.access_token
+        if commit:
+            inst.save()
+        return inst
+
+
+class AiSensyIntegrationSettingsForm(forms.ModelForm):
+    """Secrets: leave blank on save to keep previous values."""
+
+    class Meta:
+        model = AiSensyIntegrationSettings
+        fields = [
+            "public_base_url",
+            "webhook_secret",
+            "webhook_token",
+            "enabled",
+        ]
+        widgets = {
+            "public_base_url": forms.URLInput(
+                attrs={"class": "form-control", "placeholder": "https://your-domain.com"}
+            ),
+            "webhook_secret": forms.PasswordInput(
+                render_value=False,
+                attrs={"class": "form-control", "placeholder": "Leave blank to keep current"},
+            ),
+            "webhook_token": forms.PasswordInput(
+                render_value=False,
+                attrs={"class": "form-control", "placeholder": "Leave blank to keep current"},
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        inst = kwargs.get("instance")
+        if inst:
+            if inst.webhook_secret:
+                self.fields["webhook_secret"].help_text = "Leave blank to keep the current secret."
+            if inst.webhook_token:
+                self.fields["webhook_token"].help_text = "Leave blank to keep the current token."
+
+    def clean_public_base_url(self):
+        return (self.cleaned_data.get("public_base_url") or "").strip().rstrip("/")
+
+    def save(self, commit=True):
+        inst = super().save(commit=False)
+        try:
+            prev = AiSensyIntegrationSettings.objects.get(pk=1)
+        except AiSensyIntegrationSettings.DoesNotExist:
+            prev = None
+        if prev:
+            if not (self.cleaned_data.get("webhook_secret") or "").strip():
+                inst.webhook_secret = prev.webhook_secret
+            if not (self.cleaned_data.get("webhook_token") or "").strip():
+                inst.webhook_token = prev.webhook_token
         if commit:
             inst.save()
         return inst

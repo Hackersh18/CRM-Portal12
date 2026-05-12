@@ -89,8 +89,9 @@
                                 <div class="col-md-3">
                                     <div class="form-group">
                                         <label for="search">Search</label>
-                                        <input type="text" class="form-control" id="search" name="search" 
-                                               placeholder="Name, Email, Phone, ID..." value="{{ search_query }}">
+                                        <input type="text" class="form-control" id="search" name="search"
+                                               placeholder="Name, email, phone, school, course, source…" value="{{ search_query }}">
+                                        <small class="form-text text-muted">Searches the <strong>full</strong> lead list (not just this page). Press Enter or click Filter.</small>
                                     </div>
                                 </div>
                                 <div class="col-md-2">
@@ -348,6 +349,9 @@
             // Disable Responsive plugin so no '+' icon column is added;
             // use horizontal scrolling instead so Actions always stay visible.
             "responsive": false,
+            // DataTables search only filters rows on the current HTML page (~50). Server-side
+            // search uses the Filter form above so matching leads across all pages are returned.
+            "searching": false,
             "columnDefs": [
                 {
                     "targets": 0, // Select checkbox column

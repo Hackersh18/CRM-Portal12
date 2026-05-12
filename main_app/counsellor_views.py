@@ -5,8 +5,9 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import (HttpResponseRedirect, get_object_or_404,
                               redirect, render)
 from django.urls import reverse
-from django.db.models import Count, Sum, Q
+from django.db.models import Count, Prefetch, Q, Sum
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_POST
 
 from .forms import *
@@ -16,6 +17,7 @@ from .utils import (
     user_type_required,
     get_counsellor_activity_snapshot,
     get_counsellor_daily_target_progress,
+    update_lead_status_from_activity_outcome,
 )
 import os
 import requests
@@ -115,23 +117,96 @@ def counsellor_home(request):
 
 @counsellor_required
 def my_leads(request):
-    """View assigned leads"""
+    """View assigned leads with filters (aligned with admin manage_leads, scoped to this counsellor)."""
     counsellor = get_object_or_404(Counsellor, admin=request.user)
-    leads_list = Lead.objects.filter(assigned_counsellor=counsellor).select_related('source').order_by('-created_at')
-    
-    # Filter by status if provided
-    status_filter = request.GET.get('status')
+    # Prefetch (not Subquery): DBs often ignore ORDER BY inside scalar subqueries — subjects showed blank.
+    _recent_qs = LeadActivity.objects.filter(counsellor=counsellor).order_by(
+        '-completed_date', '-id'
+    )
+    leads_list = (
+        Lead.objects.filter(assigned_counsellor=counsellor)
+        .select_related('source')
+        .prefetch_related(
+            Prefetch('activities', queryset=_recent_qs, to_attr='recent_activities_prefetched'),
+        )
+        .order_by('-created_at')
+    )
+
+    search_query = (request.GET.get('search') or '').strip()
+    status_filter = (request.GET.get('status') or '').strip()
+    priority_filter = (request.GET.get('priority') or '').strip()
+    source_filter = (request.GET.get('source') or '').strip()
+    created_from_raw = (request.GET.get('created_from') or '').strip()
+    created_to_raw = (request.GET.get('created_to') or '').strip()
+    follow_up_filter = (request.GET.get('follow_up') or '').strip()
+
+    if search_query:
+        sq = search_query
+        leads_list = leads_list.filter(
+            Q(first_name__icontains=sq)
+            | Q(last_name__icontains=sq)
+            | Q(email__icontains=sq)
+            | Q(phone__icontains=sq)
+            | Q(alternate_phone__icontains=sq)
+            | Q(lead_id__icontains=sq)
+            | Q(school_name__icontains=sq)
+            | Q(course_interested__icontains=sq)
+            | Q(source__name__icontains=sq)
+        )
+
     if status_filter:
         leads_list = leads_list.filter(status=status_filter)
-    
+
+    if priority_filter:
+        leads_list = leads_list.filter(priority=priority_filter)
+
+    if source_filter:
+        try:
+            leads_list = leads_list.filter(source_id=int(source_filter))
+        except (ValueError, TypeError):
+            pass
+
+    df = parse_date(created_from_raw)
+    if df:
+        leads_list = leads_list.filter(created_at__date__gte=df)
+    dt = parse_date(created_to_raw)
+    if dt:
+        leads_list = leads_list.filter(created_at__date__lte=dt)
+
+    if follow_up_filter == 'yes':
+        leads_list = leads_list.filter(next_follow_up__isnull=False)
+    elif follow_up_filter == 'no':
+        leads_list = leads_list.filter(next_follow_up__isnull=True)
+
     # Use server-side pagination to keep response fast with many leads
     leads = paginate_queryset(request, leads_list, 50)
 
-    # Preserve filters (e.g. status) in pagination links, same pattern as admin manage_leads
     query_params = request.GET.copy()
     if 'page' in query_params:
         del query_params['page']
     query_string = query_params.urlencode()
+
+    selected_source_name = ''
+    if source_filter:
+        try:
+            src = LeadSource.objects.filter(id=int(source_filter)).first()
+            if src:
+                selected_source_name = src.name
+        except (ValueError, TypeError):
+            pass
+
+    status_display = (
+        dict(LeadStatus.get_all_choices()).get(status_filter, status_filter)
+        if status_filter
+        else ''
+    )
+    priority_display = (
+        dict(Lead.PRIORITY).get(priority_filter, priority_filter)
+        if priority_filter
+        else ''
+    )
+
+    all_sources = LeadSource.objects.filter(is_active=True).order_by('name')
 
     # Audit: log that this counsellor listed their leads (once per request)
     try:
@@ -147,7 +222,19 @@ def my_leads(request):
     context = {
         'leads': leads,
         'page_title': 'My Leads',
+        'search_query': search_query,
         'status_filter': status_filter,
+        'priority_filter': priority_filter,
+        'source_filter': source_filter,
+        'created_from': created_from_raw,
+        'created_to': created_to_raw,
+        'follow_up_filter': follow_up_filter,
+        'status_display': status_display,
+        'priority_display': priority_display,
+        'selected_source_name': selected_source_name,
+        'all_sources': all_sources,
+        'lead_statuses': LeadStatus.get_choices(),
+        'lead_priorities': Lead.PRIORITY,
         'query_string': query_string,
     }
     return render(request, 'counsellor_template/my_leads.html', context)
@@ -390,6 +477,44 @@ def edit_my_lead(request, lead_id):
 
 
 @counsellor_required
+def create_my_lead(request):
+    """Add one new lead assigned to this counsellor (only if admin enabled can_create_own_leads)."""
+    counsellor = get_object_or_404(
+        Counsellor.objects.select_related('admin'),
+        admin=request.user,
+    )
+    if not counsellor.can_create_own_leads:
+        messages.error(
+            request,
+            'You do not have permission to add leads. Ask your administrator to enable this on your profile.',
+        )
+        return redirect(reverse('my_leads'))
+
+    form = CounsellorCreateLeadForm(request.POST or None)
+    context = {
+        'form': form,
+        'page_title': 'Add Lead',
+    }
+    if request.method == 'POST':
+        if form.is_valid():
+            try:
+                lead = form.save(commit=False)
+                lead.assigned_counsellor = counsellor
+                lead.save()
+                messages.success(
+                    request,
+                    f'Lead created successfully. Lead ID: {lead.lead_id}',
+                )
+                return redirect(reverse('lead_detail', kwargs={'lead_id': lead.id}))
+            except Exception as e:
+                messages.error(request, f'Could not create lead: {str(e)}')
+        else:
+            messages.error(request, 'Please correct the errors below.')
+
+    return render(request, 'counsellor_template/create_lead.html', context)
+
+
+@counsellor_required
 def add_lead_activity(request, lead_id):
     """Add activity for a lead"""
     counsellor = get_object_or_404(Counsellor, admin=request.user)
@@ -418,8 +543,7 @@ def add_lead_activity(request, lead_id):
                 activity.save()
 
                 lead.last_contact_date = timezone.now()
-                if lead.status == 'NEW':
-                    lead.status = 'CONTACTED'
+                update_lead_status_from_activity_outcome(lead, activity.outcome)
                 lead.save()
 
                 if has_next and followup_date:
@@ -480,7 +604,8 @@ def edit_lead_activity(request, lead_id, activity_id):
 
                 if activity.is_completed:
                     lead.last_contact_date = timezone.now()
-                    lead.save()
+                update_lead_status_from_activity_outcome(lead, activity.outcome)
+                lead.save()
 
                 if has_next and followup_date:
                     LeadActivity.objects.create(
@@ -684,20 +809,75 @@ def request_lead_transfer(request, lead_id):
 
 @counsellor_required
 def my_activities(request):
-    """View my activities"""
+    """View my activities with filters (search, type, completion, next action, date range)."""
     counsellor = get_object_or_404(Counsellor, admin=request.user)
-    activities_list = LeadActivity.objects.filter(counsellor=counsellor).select_related('lead').order_by('-completed_date')
-    
-    # Filter by activity type if provided
-    activity_type = request.GET.get('activity_type')
-    if activity_type:
-        activities_list = activities_list.filter(activity_type=activity_type)
-    
-    activities = paginate_queryset(request, activities_list, 20)
+    activities_list = LeadActivity.objects.filter(counsellor=counsellor).select_related(
+        'lead', 'lead__source'
+    ).order_by('-completed_date')
+
+    search_query = (request.GET.get('search') or '').strip()
+    activity_type_filter = (request.GET.get('activity_type') or '').strip()
+    completed_filter = (request.GET.get('completed') or '').strip().lower()
+    next_action_filter = (request.GET.get('next_action') or '').strip()
+    date_from_raw = (request.GET.get('date_from') or '').strip()
+    date_to_raw = (request.GET.get('date_to') or '').strip()
+
+    if search_query:
+        sq = search_query
+        activities_list = activities_list.filter(
+            Q(subject__icontains=sq)
+            | Q(outcome__icontains=sq)
+            | Q(description__icontains=sq)
+            | Q(lead__first_name__icontains=sq)
+            | Q(lead__last_name__icontains=sq)
+            | Q(lead__lead_id__icontains=sq)
+            | Q(lead__email__icontains=sq)
+            | Q(lead__phone__icontains=sq)
+            | Q(lead__school_name__icontains=sq)
+        )
+
+    if activity_type_filter:
+        activities_list = activities_list.filter(activity_type=activity_type_filter)
+
+    if completed_filter in ('yes', '1', 'true'):
+        activities_list = activities_list.filter(is_completed=True)
+    elif completed_filter in ('no', '0', 'false'):
+        activities_list = activities_list.filter(is_completed=False)
+
+    if next_action_filter:
+        activities_list = activities_list.filter(next_action=next_action_filter)
+
+    d_from = parse_date(date_from_raw)
+    if d_from:
+        activities_list = activities_list.filter(completed_date__date__gte=d_from)
+    d_to = parse_date(date_to_raw)
+    if d_to:
+        activities_list = activities_list.filter(completed_date__date__lte=d_to)
+
+    activities = paginate_queryset(request, activities_list, 25)
+
+    query_params = request.GET.copy()
+    if 'page' in query_params:
+        del query_params['page']
+    query_string = query_params.urlencode()
+
+    activity_type_choices = ActivityType.get_choices()
+    next_action_choices = [('', 'All next actions')] + [
+        c for c in NextAction.get_choices() if c[0] != ''
+    ]
+
     context = {
         'activities': activities,
         'page_title': 'My Activities',
-        'activity_type': activity_type
+        'search_query': search_query,
+        'activity_type_filter': activity_type_filter,
+        'completed_filter': completed_filter,
+        'next_action_filter': next_action_filter,
+        'date_from': date_from_raw,
+        'date_to': date_to_raw,
+        'activity_type_choices': activity_type_choices,
+        'next_action_choices': next_action_choices,
+        'query_string': query_string,
     }
     return render(request, 'counsellor_template/my_activities.html', context)
 

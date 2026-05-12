@@ -50,24 +50,103 @@
             <div class="col-12">
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title"><label><strong>My Assinged Leads</strong></label></h3>
+                        <h3 class="card-title"><label><strong>My Assigned Leads</strong></label></h3>
                         <div class="card-tools">
-                            <div class="btn-group">
-                                <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-toggle="dropdown">
-                                    Filter by Status
-                                </button>
-                                <div class="dropdown-menu">
-                                    <a class="dropdown-item" href="{% url 'my_leads' %}">All Leads</a>
-                                    <a class="dropdown-item" href="{% url 'my_leads' %}?status=NEW">New</a>
-                                    <a class="dropdown-item" href="{% url 'my_leads' %}?status=CONTACTED">Contacted</a>
-                                    <a class="dropdown-item" href="{% url 'my_leads' %}?status=QUALIFIED">Qualified</a>
-                                    <a class="dropdown-item" href="{% url 'my_leads' %}?status=CLOSED_WON">Closed Won</a>
-                                    <a class="dropdown-item" href="{% url 'my_leads' %}?status=CLOSED_LOST">Closed Lost</a>
-                                </div>
-                            </div>
+                            {% if perm_create_own_lead %}
+                            <a href="{% url 'counsellor_add_lead' %}" class="btn btn-primary mr-2">
+                                <i class="fas fa-user-plus"></i> Add Lead
+                            </a>
+                            {% endif %}
                         </div>
                     </div>
                     <div class="card-body">
+                        <form method="get" action="{% url 'my_leads' %}" class="mb-3">
+                            <div class="row">
+                                <div class="col-lg-3 col-md-6">
+                                    <div class="form-group mb-2">
+                                        <label for="ml_search">Search</label>
+                                        <input type="text" class="form-control form-control-sm" id="ml_search" name="search"
+                                               placeholder="Name, email, phone, school, course…" value="{{ search_query }}">
+                                        <small class="text-muted">Full list — use Filter (not the table widget).</small>
+                                    </div>
+                                </div>
+                                <div class="col-lg-2 col-md-4">
+                                    <div class="form-group mb-2">
+                                        <label for="ml_status">Status</label>
+                                        <select class="form-control form-control-sm" id="ml_status" name="status">
+                                            <option value="">All statuses</option>
+                                            {% for code, name in lead_statuses %}
+                                            <option value="{{ code }}" {% if status_filter == code %}selected{% endif %}>{{ name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-lg-2 col-md-4">
+                                    <div class="form-group mb-2">
+                                        <label for="ml_priority">Priority</label>
+                                        <select class="form-control form-control-sm" id="ml_priority" name="priority">
+                                            <option value="">All priorities</option>
+                                            {% for p_code, p_name in lead_priorities %}
+                                            <option value="{{ p_code }}" {% if priority_filter == p_code %}selected{% endif %}>{{ p_name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-lg-2 col-md-4">
+                                    <div class="form-group mb-2">
+                                        <label for="ml_source">Source</label>
+                                        <select class="form-control form-control-sm" id="ml_source" name="source">
+                                            <option value="">All sources</option>
+                                            {% for src in all_sources %}
+                                            <option value="{{ src.id }}" {% if source_filter == src.id|stringformat:"d" %}selected{% endif %}>{{ src.name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-lg-2 col-md-4">
+                                    <div class="form-group mb-2">
+                                        <label for="ml_follow_up">Next visit</label>
+                                        <select class="form-control form-control-sm" id="ml_follow_up" name="follow_up">
+                                            <option value="">Any</option>
+                                            <option value="yes" {% if follow_up_filter == 'yes' %}selected{% endif %}>Scheduled</option>
+                                            <option value="no" {% if follow_up_filter == 'no' %}selected{% endif %}>Not scheduled</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-lg-1 col-md-4">
+                                    <div class="form-group mb-2">
+                                        <label>&nbsp;</label>
+                                        <button type="submit" class="btn btn-primary btn-sm btn-block"><i class="fas fa-filter"></i> Filter</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-3 col-sm-6">
+                                    <div class="form-group mb-2">
+                                        <label for="ml_created_from">Lead created from</label>
+                                        <input type="date" class="form-control form-control-sm" id="ml_created_from" name="created_from" value="{{ created_from }}">
+                                    </div>
+                                </div>
+                                <div class="col-md-3 col-sm-6">
+                                    <div class="form-group mb-2">
+                                        <label for="ml_created_to">Lead created to</label>
+                                        <input type="date" class="form-control form-control-sm" id="ml_created_to" name="created_to" value="{{ created_to }}">
+                                    </div>
+                                </div>
+                                {% if search_query or status_filter or priority_filter or source_filter or created_from or created_to or follow_up_filter %}
+                                <div class="col-md-6 align-self-end mb-2">
+                                    <a href="{% url 'my_leads' %}" class="btn btn-sm btn-secondary"><i class="fas fa-times"></i> Clear filters</a>
+                                    <span class="text-muted small ml-2">
+                                        {% if search_query %}<span class="badge badge-light border">Search: {{ search_query }}</span>{% endif %}
+                                        {% if status_filter %}<span class="badge badge-light border">Status: {{ status_display }}</span>{% endif %}
+                                        {% if priority_filter %}<span class="badge badge-light border">{{ priority_display }}</span>{% endif %}
+                                        {% if source_filter %}<span class="badge badge-light border">{{ selected_source_name }}</span>{% endif %}
+                                        {% if follow_up_filter == 'yes' %}<span class="badge badge-light border">Visit scheduled</span>{% elif follow_up_filter == 'no' %}<span class="badge badge-light border">No visit</span>{% endif %}
+                                    </span>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </form>
                         <table id="example1" class="table table-bordered table-striped">
                             <thead>
                                 <tr>
@@ -81,6 +160,7 @@
                                     <th>Priority</th>
                                     <th>Last Contact</th>
                                     <th>Next Visit Date</th>
+                                    <th>Recent Activity</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -132,6 +212,19 @@
                                             {{lead.next_follow_up|date:"M d, Y"}}
                                         {% else %}
                                             <span class="text-muted">Not scheduled</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if lead.recent_activities_prefetched %}
+                                            {% with act=lead.recent_activities_prefetched.0 %}
+                                            {% if act.subject %}
+                                            <span title="{{ act.subject }}">{{ act.subject|truncatechars:70 }}</span>
+                                            {% else %}
+                                            <span class="text-muted" title="Latest activity has no subject">—</span>
+                                            {% endif %}
+                                            {% endwith %}
+                                        {% else %}
+                                            <span class="text-muted">—</span>
                                         {% endif %}
                                     </td>
                                     <td class="actions-cell">
@@ -192,6 +285,7 @@
         $("#example1").DataTable({
             // Match admin manage_leads: Django paginator handles pages; DataTables only for export/colvis/sort on current page
             "responsive": false,
+            "searching": false,
             "paging": false,
             "info": false,
             "lengthChange": false,

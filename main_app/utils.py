@@ -264,3 +264,19 @@ def get_counsellor_activity_snapshot(counsellor):
         except Exception:
             logger.warning("Counsellor snapshot cache write failed", exc_info=True)
     return out
+
+
+def update_lead_status_from_activity_outcome(lead, outcome_str):
+    """
+    After logging an activity: empty outcome -> AWAITING_RESPONSE (pipeline still open).
+    Any non-empty outcome moves NEW or AWAITING_RESPONSE toward CONTACTED.
+    Terminal statuses are left unchanged.
+    """
+    outcome_str = (outcome_str or "").strip()
+    terminal = {"CLOSED_WON", "CLOSED_LOST", "TRANSFERRED"}
+    if lead.status in terminal:
+        return
+    if not outcome_str:
+        lead.status = "AWAITING_RESPONSE"
+    elif lead.status in ("NEW", "AWAITING_RESPONSE"):
+        lead.status = "CONTACTED"
