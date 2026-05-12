@@ -608,15 +608,22 @@ def manage_leads(request):
     counsellor_filter = request.GET.get('counsellor', '')
     source_filter = request.GET.get('source', '')
     
-    # Apply search filter
+    # Apply search filter (full queryset before pagination — searches all leads, not one page)
     if search_query:
+        sq = search_query.strip()
+        if sq:
             leads_list = leads_list.filter(
-                Q(first_name__icontains=search_query) |
-                Q(last_name__icontains=search_query) |
-                Q(email__icontains=search_query) |
-                Q(phone__icontains=search_query) |
-                Q(alternate_phone__icontains=search_query) |
-                Q(lead_id__icontains=search_query)
+                Q(first_name__icontains=sq)
+                | Q(last_name__icontains=sq)
+                | Q(email__icontains=sq)
+                | Q(phone__icontains=sq)
+                | Q(alternate_phone__icontains=sq)
+                | Q(lead_id__icontains=sq)
+                | Q(school_name__icontains=sq)
+                | Q(course_interested__icontains=sq)
+                | Q(source__name__icontains=sq)
+                | Q(assigned_counsellor__admin__first_name__icontains=sq)
+                | Q(assigned_counsellor__admin__last_name__icontains=sq)
             )
     
     # Apply status filter
