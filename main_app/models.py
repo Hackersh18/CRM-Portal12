@@ -90,6 +90,10 @@ class Counsellor(models.Model):
     department = models.CharField(max_length=100, blank=True)
     joining_date = models.DateField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
+    can_create_own_leads = models.BooleanField(
+        default=False,
+        help_text="When enabled, this counsellor may add a single new lead from My Leads.",
+    )
     performance_rating = models.DecimalField(max_digits=3, decimal_places=2, default=0.00)
     total_leads_assigned = models.IntegerField(default=0)
     total_business_generated = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
@@ -141,6 +145,7 @@ class LeadStatus(models.Model):
 DEFAULT_LEAD_STATUSES = (
     ('NEW', 'New'),
     ('CONTACTED', 'Contacted'),
+    ('AWAITING_RESPONSE', 'Awaiting Response'),
     ('QUALIFIED', 'Qualified'),
     ('PROPOSAL_SENT', 'Proposal Sent'),
     ('NEGOTIATION', 'Negotiation'),
@@ -545,6 +550,55 @@ class MetaIntegrationSettings(models.Model):
             defaults={
                 "verify_token": "",
                 "public_base_url": "",
+            },
+        )
+        return obj
+
+
+class AiSensyIntegrationSettings(models.Model):
+    """
+    Single row (pk=1): AiSensy webhook configuration.
+    Env vars can override DB values:
+    - AISENSY_WEBHOOK_SECRET
+    - AISENSY_WEBHOOK_TOKEN
+    """
+
+    public_base_url = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="Public site URL, no trailing slash (e.g. https://crm.example.com). Used to show webhook URL.",
+    )
+    webhook_secret = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="HMAC secret used to validate signature headers from AiSensy (preferred auth mode).",
+    )
+    webhook_token = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Fallback token validation if signature secret is not used.",
+    )
+    enabled = models.BooleanField(
+        default=True,
+        help_text="When disabled, incoming AiSensy events are ignored.",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "AiSensy integration"
+        verbose_name_plural = "AiSensy integration"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(
+            pk=1,
+            defaults={
+                "public_base_url": "",
+                "enabled": True,
             },
         )
         return obj

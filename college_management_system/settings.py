@@ -109,6 +109,21 @@ CSRF_TRUSTED_ORIGINS = [
     o.strip().rstrip("/") for o in _csrf_origins.split(',') if o.strip()
 ]
 
+# Single canonical site URL (optional): adds its origin to CSRF_TRUSTED_ORIGINS.
+for _site_url_key in ("SITE_URL", "DJANGO_SITE_URL"):
+    _su = os.environ.get(_site_url_key, "").strip()
+    if _su:
+        try:
+            _sp = urlparse(_su if "://" in _su else f"https://{_su}")
+            if _sp.scheme in ("http", "https") and _sp.netloc:
+                _append_unique(
+                    CSRF_TRUSTED_ORIGINS,
+                    f"{_sp.scheme}://{_sp.netloc}".rstrip("/"),
+                )
+        except ValueError:
+            pass
+        break
+
 # --- Vercel: preview URLs differ per deploy (e.g. *-hash-team.vercel.app). VERCEL_URL is set automatically.
 # https://vercel.com/docs/projects/environment-variables/system-environment-variables
 if os.environ.get("VERCEL"):
@@ -172,6 +187,16 @@ elif _ht in ("1", "true", "yes", "on"):
     _use_https = True
 else:
     _use_https = True  # unset or unknown → secure default
+
+# If CSRF_TRUSTED_ORIGINS is still empty, derive from concrete ALLOWED_HOSTS. Omitting this with HTTPS
+# (Django 4+) is a frequent cause of "403 CSRF verification failed" on login and all POST forms.
+# Skip when DEBUG so local runserver (http://127.0.0.1:8000) is not mismatched by https://127.0.0.1.
+if not DEBUG and not CSRF_TRUSTED_ORIGINS:
+    for _h in ALLOWED_HOSTS:
+        if not _h or _h.startswith(".") or "*" in _h:
+            continue
+        _sch = "https" if _use_https else "http"
+        _append_unique(CSRF_TRUSTED_ORIGINS, f"{_sch}://{_h}")
 
 # Security Headers for Production
 if not DEBUG:
@@ -243,6 +268,7 @@ TEMPLATES = [
                 'main_app.context_processors.lead_status_info',
                 'main_app.context_processors.pending_task_count',
                 'main_app.context_processors.admin_permissions',
+                'main_app.context_processors.counsellor_permissions',
             ],
         },
     },

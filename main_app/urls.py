@@ -3,7 +3,7 @@ from django.urls import path
 from django.conf import settings
 from django.contrib.auth import views as auth_views
 
-from . import admin_views, counsellor_views, views, views_meta
+from . import admin_views, counsellor_views, views, views_aisensy, views_meta
 
 urlpatterns = [
     # Authentication URLs
@@ -16,6 +16,16 @@ urlpatterns = [
         "integrations/meta/webhook/",
         views_meta.meta_webhook,
         name="meta_webhook",
+    ),
+    path(
+        "integrations/aisensy/webhook/",
+        views_aisensy.aisensy_webhook,
+        name="aisensy_webhook",
+    ),
+    path(
+        "integrations/aisensy/settings/",
+        views_aisensy.manage_aisensy_integration,
+        name="manage_aisensy_integration",
     ),
 
     # Password Reset URLs
@@ -126,6 +136,7 @@ urlpatterns = [
     
     # Counsellor Lead Management
     path('counsellor/leads/', counsellor_views.my_leads, name='my_leads'),
+    path('counsellor/leads/add/', counsellor_views.create_my_lead, name='counsellor_add_lead'),
     path('counsellor/leads/<int:lead_id>/', counsellor_views.lead_detail, name='lead_detail'),
     path('counsellor/leads/<int:lead_id>/edit/', counsellor_views.edit_my_lead, name='edit_my_lead'),
     path('counsellor/leads/<int:lead_id>/alternate-phone/add/', counsellor_views.add_alternate_phone, name='add_alternate_phone'),

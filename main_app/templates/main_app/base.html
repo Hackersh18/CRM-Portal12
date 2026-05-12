@@ -172,6 +172,12 @@
                                 </a>
                             </li>
                             <li class="nav-item">
+                                <a href="{% url 'manage_aisensy_integration' %}" class="nav-link">
+                                    <i class="nav-icon fas fa-comment-dots"></i>
+                                    <p>AiSensy WhatsApp</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
                                 <a href="{% url 'social_chat_inbox' %}" class="nav-link">
                                     <i class="nav-icon fas fa-comments"></i>
                                     <p>Social inbox</p>
@@ -220,6 +226,14 @@
                                     <p>My Leads</p>
                                 </a>
                             </li>
+                            {% if perm_create_own_lead %}
+                            <li class="nav-item">
+                                <a href="{% url 'counsellor_add_lead' %}" class="nav-link">
+                                    <i class="nav-icon fas fa-user-plus"></i>
+                                    <p>Add Lead</p>
+                                </a>
+                            </li>
+                            {% endif %}
                             <li class="nav-item">
                                 <a href="{% url 'my_businesses' %}" class="nav-link">
                                     <i class="nav-icon fas fa-briefcase"></i>

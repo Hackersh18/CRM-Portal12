@@ -1,0 +1,80 @@
+{% extends 'main_app/base.html' %}
+{% block page_title %}{{ page_title }}{% endblock page_title %}
+{% block content_title %}{{ page_title }}{% endblock content_title %}
+
+{% block content %}
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card card-primary">
+                    <div class="card-header">
+                        <h3 class="card-title">Connection</h3>
+                    </div>
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+                        <div class="card-body">
+                            {% if form.non_field_errors %}
+                                <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                            {% endif %}
+                            <p class="text-muted">
+                                Configure AiSensy inbound webhook auth and callback details. Incoming WhatsApp messages create/update CRM leads automatically.
+                            </p>
+
+                            <div class="form-group">
+                                <label for="{{ form.public_base_url.id_for_label }}">Public site URL</label>
+                                {{ form.public_base_url }}
+                                <small class="form-text text-muted">HTTPS root of this CRM (no trailing slash). Used to display webhook callback URL.</small>
+                                {% if form.public_base_url.errors %}<span class="text-danger">{{ form.public_base_url.errors }}</span>{% endif %}
+                            </div>
+
+                            <div class="form-group">
+                                <label for="{{ form.webhook_secret.id_for_label }}">Webhook signature secret (recommended)</label>
+                                {{ form.webhook_secret }}
+                                <small class="form-text text-muted">AiSensy should send an HMAC SHA256 signature header; CRM verifies request body integrity using this secret.</small>
+                                {% if form.webhook_secret.errors %}<span class="text-danger">{{ form.webhook_secret.errors }}</span>{% endif %}
+                            </div>
+
+                            <div class="form-group">
+                                <label for="{{ form.webhook_token.id_for_label }}">Webhook token (fallback)</label>
+                                {{ form.webhook_token }}
+                                <small class="form-text text-muted">Used only when signature secret is not configured. Accepts Bearer token or X-AISENSY-TOKEN headers.</small>
+                                {% if form.webhook_token.errors %}<span class="text-danger">{{ form.webhook_token.errors }}</span>{% endif %}
+                            </div>
+
+                            <div class="form-check mb-2">
+                                {{ form.enabled }}
+                                <label class="form-check-label" for="{{ form.enabled.id_for_label }}">Enable AiSensy webhook ingestion</label>
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <button type="submit" class="btn btn-primary">Save</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card card-outline card-secondary">
+                    <div class="card-header">
+                        <h3 class="card-title">Webhook callback URL</h3>
+                    </div>
+                    <div class="card-body">
+                        {% if webhook_full_url %}
+                            <p class="mb-2"><strong>Copy into AiSensy:</strong></p>
+                            <code class="d-block small text-break p-2 bg-light border rounded">{{ webhook_full_url }}</code>
+                        {% else %}
+                            <p class="text-warning mb-0">Set <strong>Public site URL</strong>, save, then reload to see full callback URL.</p>
+                        {% endif %}
+                        <hr>
+                        <p class="small text-muted mb-1">Path only: <code>{{ webhook_path }}</code></p>
+                        <p class="small text-muted mb-1">Enabled: <strong>{{ enabled|yesno:"Yes,No" }}</strong></p>
+                        <p class="small text-muted mb-1">Auth mode priority: <strong>Signature secret</strong> then <strong>Token</strong>.</p>
+                        <p class="small text-muted mb-0">Environment variables override saved DB values if set.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock content %}

@@ -5,7 +5,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import (HttpResponseRedirect, get_object_or_404,
                               redirect, render)
 from django.urls import reverse
-from django.db.models import Count, Sum, Q
+from django.db.models import Count, Prefetch, Q, Sum
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -16,6 +16,7 @@ from .utils import (
     user_type_required,
     get_counsellor_activity_snapshot,
     get_counsellor_daily_target_progress,
+    update_lead_status_from_activity_outcome,
 )
 import os
 import requests
@@ -117,7 +118,18 @@ def counsellor_home(request):
 def my_leads(request):
     """View assigned leads"""
     counsellor = get_object_or_404(Counsellor, admin=request.user)
-    leads_list = Lead.objects.filter(assigned_counsellor=counsellor).select_related('source').order_by('-created_at')
+    # Prefetch (not Subquery): DBs often ignore ORDER BY inside scalar subqueries — subjects showed blank.
+    _recent_qs = LeadActivity.objects.filter(counsellor=counsellor).order_by(
+        '-completed_date', '-id'
+    )
+    leads_list = (
+        Lead.objects.filter(assigned_counsellor=counsellor)
+        .select_related('source')
+        .prefetch_related(
+            Prefetch('activities', queryset=_recent_qs, to_attr='recent_activities_prefetched'),
+        )
+        .order_by('-created_at')
+    )
     
     # Filter by status if provided
     status_filter = request.GET.get('status')
@@ -390,6 +402,44 @@ def edit_my_lead(request, lead_id):
 
 
 @counsellor_required
+def create_my_lead(request):
+    """Add one new lead assigned to this counsellor (only if admin enabled can_create_own_leads)."""
+    counsellor = get_object_or_404(
+        Counsellor.objects.select_related('admin'),
+        admin=request.user,
+    )
+    if not counsellor.can_create_own_leads:
+        messages.error(
+            request,
+            'You do not have permission to add leads. Ask your administrator to enable this on your profile.',
+        )
+        return redirect(reverse('my_leads'))
+
+    form = CounsellorCreateLeadForm(request.POST or None)
+    context = {
+        'form': form,
+        'page_title': 'Add Lead',
+    }
+    if request.method == 'POST':
+        if form.is_valid():
+            try:
+                lead = form.save(commit=False)
+                lead.assigned_counsellor = counsellor
+                lead.save()
+                messages.success(
+                    request,
+                    f'Lead created successfully. Lead ID: {lead.lead_id}',
+                )
+                return redirect(reverse('lead_detail', kwargs={'lead_id': lead.id}))
+            except Exception as e:
+                messages.error(request, f'Could not create lead: {str(e)}')
+        else:
+            messages.error(request, 'Please correct the errors below.')
+
+    return render(request, 'counsellor_template/create_lead.html', context)
+
+
+@counsellor_required
 def add_lead_activity(request, lead_id):
     """Add activity for a lead"""
     counsellor = get_object_or_404(Counsellor, admin=request.user)
@@ -418,8 +468,7 @@ def add_lead_activity(request, lead_id):
                 activity.save()
 
                 lead.last_contact_date = timezone.now()
-                if lead.status == 'NEW':
-                    lead.status = 'CONTACTED'
+                update_lead_status_from_activity_outcome(lead, activity.outcome)
                 lead.save()
 
                 if has_next and followup_date:
@@ -480,7 +529,8 @@ def edit_lead_activity(request, lead_id, activity_id):
 
                 if activity.is_completed:
                     lead.last_contact_date = timezone.now()
-                    lead.save()
+                update_lead_status_from_activity_outcome(lead, activity.outcome)
+                lead.save()
 
                 if has_next and followup_date:
                     LeadActivity.objects.create(
