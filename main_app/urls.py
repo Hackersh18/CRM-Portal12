@@ -136,7 +136,6 @@ urlpatterns = [
     
     # Counsellor Lead Management
     path('counsellor/leads/', counsellor_views.my_leads, name='my_leads'),
-    path('counsellor/leads/add/', counsellor_views.create_my_lead, name='counsellor_add_lead'),
     path('counsellor/leads/<int:lead_id>/', counsellor_views.lead_detail, name='lead_detail'),
     path('counsellor/leads/<int:lead_id>/edit/', counsellor_views.edit_my_lead, name='edit_my_lead'),
     path('counsellor/leads/<int:lead_id>/alternate-phone/add/', counsellor_views.add_alternate_phone, name='add_alternate_phone'),

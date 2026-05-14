@@ -90,10 +90,6 @@ class Counsellor(models.Model):
     department = models.CharField(max_length=100, blank=True)
     joining_date = models.DateField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
-    can_create_own_leads = models.BooleanField(
-        default=False,
-        help_text="When enabled, this counsellor may add a single new lead from My Leads.",
-    )
     performance_rating = models.DecimalField(max_digits=3, decimal_places=2, default=0.00)
     total_leads_assigned = models.IntegerField(default=0)
     total_business_generated = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)

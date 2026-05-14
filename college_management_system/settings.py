@@ -268,7 +268,6 @@ TEMPLATES = [
                 'main_app.context_processors.lead_status_info',
                 'main_app.context_processors.pending_task_count',
                 'main_app.context_processors.admin_permissions',
-                'main_app.context_processors.counsellor_permissions',
             ],
         },
     },

@@ -477,44 +477,6 @@ def edit_my_lead(request, lead_id):
 
 
 @counsellor_required
-def create_my_lead(request):
-    """Add one new lead assigned to this counsellor (only if admin enabled can_create_own_leads)."""
-    counsellor = get_object_or_404(
-        Counsellor.objects.select_related('admin'),
-        admin=request.user,
-    )
-    if not counsellor.can_create_own_leads:
-        messages.error(
-            request,
-            'You do not have permission to add leads. Ask your administrator to enable this on your profile.',
-        )
-        return redirect(reverse('my_leads'))
-
-    form = CounsellorCreateLeadForm(request.POST or None)
-    context = {
-        'form': form,
-        'page_title': 'Add Lead',
-    }
-    if request.method == 'POST':
-        if form.is_valid():
-            try:
-                lead = form.save(commit=False)
-                lead.assigned_counsellor = counsellor
-                lead.save()
-                messages.success(
-                    request,
-                    f'Lead created successfully. Lead ID: {lead.lead_id}',
-                )
-                return redirect(reverse('lead_detail', kwargs={'lead_id': lead.id}))
-            except Exception as e:
-                messages.error(request, f'Could not create lead: {str(e)}')
-        else:
-            messages.error(request, 'Please correct the errors below.')
-
-    return render(request, 'counsellor_template/create_lead.html', context)
-
-
-@counsellor_required
 def add_lead_activity(request, lead_id):
     """Add activity for a lead"""
     counsellor = get_object_or_404(Counsellor, admin=request.user)
