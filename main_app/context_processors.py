@@ -75,14 +75,3 @@ def admin_permissions(request):
         }
     except Admin.DoesNotExist:
         return {}
-
-
-def counsellor_permissions(request):
-    """perm_create_own_lead for counsellor sidebar / templates."""
-    if not request.user.is_authenticated or str(getattr(request.user, 'user_type', '')) != '2':
-        return {}
-    try:
-        c = Counsellor.objects.get(admin=request.user)
-        return {'perm_create_own_lead': bool(c.can_create_own_leads)}
-    except Counsellor.DoesNotExist:
-        return {'perm_create_own_lead': False}

@@ -318,23 +318,6 @@ ACTIVITY_OUTCOME_CHOICES = [
 ]
 
 
-class CounsellorCreateLeadForm(CounsellorLeadForm):
-    """Create a new lead assigned to the current counsellor; includes source (admin-controlled list)."""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields['source'].queryset = LeadSource.objects.filter(is_active=True).order_by('name')
-        self.fields['source'].empty_label = 'Select lead source'
-
-    class Meta(CounsellorLeadForm.Meta):
-        fields = [
-            'name', 'email', 'phone', 'alternate_phone', 'school_name',
-            'graduation_status', 'graduation_course', 'graduation_year', 'graduation_college',
-            'course_interested', 'source', 'status', 'priority',
-            'notes', 'address', 'next_follow_up',
-        ]
-
-
 class LeadActivityForm(FormSettings):
     HAS_NEXT_ACTION_CHOICES = [('no', 'No'), ('yes', 'Yes')]
 
@@ -482,11 +465,6 @@ class CounsellorEditForm(CustomUserForm):
     employee_id = forms.CharField(max_length=20, required=True)
     department = forms.CharField(max_length=100, required=False)
     is_active = forms.BooleanField(required=False)
-    can_create_own_leads = forms.BooleanField(
-        required=False,
-        label='Allow adding leads',
-        help_text='Let this counsellor add new leads from My Leads (assigned to them).',
-    )
 
     def __init__(self, *args, **kwargs):
         # Extract counsellor instance if provided
@@ -498,7 +476,6 @@ class CounsellorEditForm(CustomUserForm):
             self.fields['employee_id'].initial = counsellor_instance.employee_id
             self.fields['department'].initial = counsellor_instance.department
             self.fields['is_active'].initial = counsellor_instance.is_active
-            self.fields['can_create_own_leads'].initial = counsellor_instance.can_create_own_leads
 
     class Meta(CustomUserForm.Meta):
         model = CustomUser

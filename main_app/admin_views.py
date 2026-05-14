@@ -463,9 +463,6 @@ def edit_counsellor(request, counsellor_id):
                 counsellor.employee_id = form.cleaned_data['employee_id']
                 counsellor.department = form.cleaned_data['department']
                 counsellor.is_active = form.cleaned_data['is_active']
-                counsellor.can_create_own_leads = form.cleaned_data.get(
-                    'can_create_own_leads', False
-                )
                 counsellor.save()
                 
                 messages.success(request, "Counsellor updated successfully!")

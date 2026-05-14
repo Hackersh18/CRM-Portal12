@@ -81,21 +81,6 @@
                                         {% endif %}
                                     </div>
                                     <div class="form-group">
-                                        <label>Lead creation</label>
-                                        <div class="form-check">
-                                            {{ form.can_create_own_leads }}
-                                            <label class="form-check-label" for="{{ form.can_create_own_leads.id_for_label }}">
-                                                Allow this counsellor to add new leads (My Leads)
-                                            </label>
-                                        </div>
-                                        {% if form.can_create_own_leads.help_text %}
-                                            <small class="form-text text-muted">{{ form.can_create_own_leads.help_text }}</small>
-                                        {% endif %}
-                                        {% if form.can_create_own_leads.errors %}
-                                            <span class="text-danger">{{ form.can_create_own_leads.errors }}</span>
-                                        {% endif %}
-                                    </div>
-                                    <div class="form-group">
                                         <label>Password</label>
                                         {{form.password}}
                                         <small class="form-text text-muted">Fill this only if you wish to update password</small>
