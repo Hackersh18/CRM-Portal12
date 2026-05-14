@@ -39,4 +39,6 @@ For **production**, **environment variables**, **Supabase/Render/Vercel**, **lea
 
 Default remote may be `Hackersh18/CRM-Portal` or your fork — adjust clone URL accordingly.
 
+---
+
 
